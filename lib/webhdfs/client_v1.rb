@@ -19,6 +19,17 @@ module WebHDFS
     attr_accessor :retry_known_errors # default false (not to retry)
     attr_accessor :retry_times        # default 1 (ignored when retry_known_errors is false)
     attr_accessor :retry_interval     # default 1 ([sec], ignored when retry_known_errors is false)
+    attr_accessor :ssl
+    attr_accessor :ssl_ca_file
+    attr_reader   :ssl_verify_mode
+
+    SSL_VERIFY_MODES = [:none, :peer, :fail_if_no_peer_cert, :client_once]
+    def ssl_verify_mode=(mode)
+      unless SSL_VERIFY_MODES.include? mode
+        raise ArgumentError, "Invalid SSL verify mode #{mode.inspect}"
+      end
+      @ssl_verify_mode = mode
+    end
 
     def initialize(host='localhost', port=50070, username=nil, doas=nil, proxy_address=nil, proxy_port=nil)
       @host = host
@@ -32,6 +43,10 @@ module WebHDFS
       @retry_interval = 1
 
       @httpfs_mode = false
+
+      @ssl = false
+      @ssl_ca_file = nil
+      @ssl_verify_mode = nil
     end
 
     # curl -i -X PUT "http://<HOST>:<PORT>/webhdfs/v1/<PATH>?op=CREATE
@@ -261,6 +276,20 @@ module WebHDFS
       conn.proxy_pass = @proxy_pass if @proxy_pass
       conn.open_timeout = @open_timeout if @open_timeout
       conn.read_timeout = @read_timeout if @read_timeout
+
+      if @ssl
+        conn.use_ssl = true
+        conn.ca_file = @ssl_ca_file if @ssl_ca_file
+        if @ssl_verify_mode
+          require 'openssl'
+          conn.verify_mode = case @ssl_verify_mode
+                             when :none then OpenSSL::SSL::VERIFY_NONE
+                             when :peer then OpenSSL::SSL::VERIFY_PEER
+                             when :fail_if_no_peer_cert then OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+                             when :client_once then OpenSSL::SSL::VERIFY_CLIENT_ONCE
+                             end
+        end
+      end
 
       request_path = if op
                        build_path(path, op, params)
