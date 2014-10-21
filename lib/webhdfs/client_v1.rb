@@ -302,7 +302,12 @@ module WebHDFS
         require 'base64'
         require 'gssapi'
         gsscli = GSSAPI::Simple.new(@host, 'HTTP')
-        token = gsscli.init_context
+        token = nil
+        begin
+          token = gsscli.init_context
+        rescue => e
+          raise WebHDFS::KerberosError, e.message
+        end
         if header
           header['Authorization'] = "Negotiate #{Base64.strict_encode64(token)}"
         else
